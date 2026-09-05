@@ -1,0 +1,22 @@
+# —— 后端 ——
+backend/__pycache__/
+backend/*.pyc
+backend/ruc_news.db
+backend/session.json
+backend/.venv/
+
+# —— 前端 ——
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+frontend/.env.local
+frontend/.env.*.local
+
+# —— 通用 ——
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

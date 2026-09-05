@@ -1,0 +1,57 @@
+/*
+ * RUC News 设计系统 —— 色彩 / 间距 / 字体 Token
+ * 主题：米黄底 · 血红色字（柔化、简洁）
+ */
+:root {
+  /* —— 品牌与功能色 —— */
+  --color-primary: #A52A2A;   /* 主品牌色：血红色 */
+  --color-bounty: #D9A441;    /* 悬赏 / 金币：柔金 */
+  --color-warning: #B03A2E;   /* 失物 / 警告：暗红 */
+  --color-success: #7C9E55;   /* 组队 / 成功：柔绿 */
+
+  /* —— 中性色 —— */
+  --color-bg: #F6EFDE;              /* 米黄页面背景 */
+  --color-card: #FFFCF4;            /* 卡片底色：暖白 */
+  --color-text-primary: #8B1A1A;    /* 主标题文字：血红 */
+  --color-text-secondary: #B8837A;  /* 次要描述文字：柔和暖棕 */
+  --color-divider: #EADFC8;         /* 分割线：米黄 */
+
+  /* —— 布局尺寸（柔化圆角）—— */
+  --page-margin: 16px;    /* 页面边距 */
+  --radius-card: 16px;    /* 卡片圆角 */
+  --radius-button: 10px;  /* 按钮圆角 */
+  --shadow-card: 0 2px 10px rgba(139, 26, 26, 0.06);  /* 柔和投影 */
+
+  /* —— 字体 —— */
+  --font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* 字号层级 */
+  --font-size-nav: 20px;          /* 导航标题 */
+  --font-size-card-title: 17px;   /* 卡片标题 */
+  --font-size-body: 15px;         /* 正文内容 */
+  --font-size-aux: 13px;          /* 辅助时间/标签 */
+
+  /* 字重 */
+  --font-weight-nav: 700;
+  --font-weight-card-title: 600;
+  --font-weight-body: 400;
+  --font-weight-aux: 400;
+
+  /* —— Vant 4 主题变量覆盖（对齐米黄底 / 血红色字）—— */
+  --van-primary-color: #A52A2A;
+  --van-text-color: #8B1A1A;
+  --van-text-color-2: #B8837A;
+  --van-text-color-3: #B8837A;
+  --van-background: #F6EFDE;
+  --van-background-2: #FFFCF4;
+  --van-border-color: #EADFC8;
+  --van-nav-bar-background: #FFFCF4;
+  --van-nav-bar-title-text-color: #8B1A1A;
+  --van-nav-bar-text-color: #A52A2A;
+  --van-nav-bar-icon-color: #A52A2A;
+  --van-tabs-bottom-bar-color: #A52A2A;
+  --van-tab-text-color: #B8837A;
+  --van-tab-active-text-color: #A52A2A;
+  --van-button-primary-background: #A52A2A;
+  --van-button-primary-border-color: #A52A2A;
+}

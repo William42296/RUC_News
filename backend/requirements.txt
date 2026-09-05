@@ -1,0 +1,9 @@
+flask
+sqlalchemy
+redis==4.6.0
+requests
+pandas
+numpy
+jieba
+PyJWT
+mitmproxy

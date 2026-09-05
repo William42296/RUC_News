@@ -1,0 +1,80 @@
+@import './variables.css';
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#app {
+  height: 100%;
+}
+
+/* —— 页面容器：预留底部固定 Tab 高度 —— */
+.page {
+  min-height: 100vh;
+  padding-bottom: calc(56px + env(safe-area-inset-bottom));
+}
+
+/* —— 页面切换：淡入淡出 300ms —— */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* —— 按钮点击缩放反馈（0.95 倍）—— */
+.pressable {
+  transition: transform 0.1s ease;
+}
+.pressable:active {
+  transform: scale(0.95);
+}
+
+/* —— 通用工具类 —— */
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ellipsis-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* —— 关键词高亮（搜索结果）—— */
+.highlight {
+  background: #FFF3B0;
+  color: var(--color-text-primary);
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+/* —— 列表末端提示 —— */
+.list-end {
+  padding: 16px 0 24px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-aux);
+}

@@ -1,8 +1,8 @@
 <script setup>
-import { computed, ref, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { debounce } from 'lodash-es'
-import { search as searchApi } from '@/api'
+import { search as searchApi, getSearchHot } from '@/api'
 import { getCache, setCache } from '@/utils/cache'
 import { getStorage, setStorage, removeStorage } from '@/utils/storage'
 import { extractList, extractHasMore } from '@/utils/extract'
@@ -15,9 +15,11 @@ import PostCard from '@/components/PostCard.vue'
 defineOptions({ name: 'Search' })
 
 const router = useRouter()
+const route = useRoute()
 
 const keyword = ref('')          // 输入框当前值
 const submittedKeyword = ref('') // 实际已提交搜索的词
+const postTypeFilter = ref('')   // 快捷分类过滤（lost/secondhand/team）
 const items = ref([])
 const page = ref(1)
 const loading = ref(false)
@@ -28,14 +30,27 @@ const searchTimeMs = ref(null)
 
 const history = ref(getStorage(CACHE_KEYS.SEARCH_HISTORY, []))
 
-const hasResult = computed(() => submittedKeyword.value !== '')
+// 快捷分类胶囊（浅蓝底深蓝字）
+const QUICK_TYPES = [
+  { key: 'secondhand', label: '二手交易' },
+  { key: 'lost', label: '失物招领' },
+  { key: 'team', label: '组队' }
+]
+
+// 大家都在搜
+const hotList = ref([])
+const hotOffset = ref(0)
+const hotHidden = ref(getStorage(CACHE_KEYS.SEARCH_HOT_HIDDEN, false))
+
+const hasResult = computed(() => submittedKeyword.value !== '' || postTypeFilter.value !== '')
 
 function cacheKeyFor(kw, p) {
-  return `${CACHE_KEYS.SEARCH_RES}:${kw}:${p}`
+  return `${CACHE_KEYS.SEARCH_RES}:${kw}:${postTypeFilter.value}:${p}`
 }
 
 function clearResults() {
   submittedKeyword.value = ''
+  postTypeFilter.value = ''
   items.value = []
   page.value = 1
   loaded.value = false
@@ -45,10 +60,9 @@ function clearResults() {
 }
 
 async function fetchPage(kw, p) {
-  const res = await searchApi(kw, p)
+  const res = await searchApi(kw, p, postTypeFilter.value)
   const list = extractList(res).map(normalizePost).filter(Boolean)
   const hasMore = extractHasMore(res, list)
-  // 搜索耗时：优先取 data.search_time_ms，其次取 res.search_time_ms
   const cost = res?.data?.search_time_ms ?? res?.search_time_ms
   if (cost != null) searchTimeMs.value = cost
   return { list, hasMore }
@@ -56,20 +70,20 @@ async function fetchPage(kw, p) {
 
 async function runSearch(val) {
   const kw = String(val ?? '').trim()
-  if (!kw) return
   submittedKeyword.value = kw
   page.value = 1
   loaded.value = false
   finished.value = false
   error.value = false
 
-  // 缓存优先
+  if (!kw && !postTypeFilter.value) return
+
   const cached = getCache(cacheKeyFor(kw, 1))
   if (cached) {
     items.value = cached.items || []
     finished.value = cached.finished ?? false
     loaded.value = true
-    saveHistory(kw)
+    if (kw) saveHistory(kw)
     return
   }
 
@@ -79,14 +93,14 @@ async function runSearch(val) {
     finished.value = !hasMore
     loaded.value = true
     setCache(cacheKeyFor(kw, 1), { items: list, finished: !hasMore })
-    saveHistory(kw)
+    if (kw) saveHistory(kw)
   } catch (e) {
     error.value = true
   }
 }
 
 async function loadMore() {
-  if (loading.value || finished.value || !submittedKeyword.value) return
+  if (loading.value || finished.value || !hasResult.value) return
   loading.value = true
   const kw = submittedKeyword.value
   const next = page.value + 1
@@ -127,13 +141,12 @@ function onInput(val) {
   keyword.value = val
   if (!val.trim()) {
     debouncedSearch.cancel()
-    clearResults()
+    if (!postTypeFilter.value) clearResults()
     return
   }
   debouncedSearch(val)
 }
 
-// 回车 / 搜索键
 function onSearchSubmit(val) {
   debouncedSearch.cancel()
   runSearch(val)
@@ -145,11 +158,61 @@ function onHistoryClick(item) {
   runSearch(item)
 }
 
+// 快捷分类点击：触发搜索并按 post_type 过滤
+function onQuickType(t) {
+  postTypeFilter.value = t.key
+  keyword.value = ''
+  debouncedSearch.cancel()
+  runSearch('')
+}
+
+// 大家都在搜
+async function loadHot(offset = 0) {
+  try {
+    const res = await getSearchHot({ offset })
+    const raw = res?.data?.hot ?? []
+    if (raw.length) {
+      hotList.value = raw
+      hotOffset.value = offset
+    } else if (offset > 0) {
+      // 换一换到末尾：回到开头
+      await loadHot(0)
+    }
+  } catch (e) {
+    // 静默
+  }
+}
+
+function onHotClick(item) {
+  keyword.value = item.title
+  debouncedSearch.cancel()
+  runSearch(item.title)
+}
+
+function onHotRefresh() {
+  loadHot(hotOffset.value + 10)
+}
+
+function onHotClose() {
+  hotHidden.value = true
+  setStorage(CACHE_KEYS.SEARCH_HOT_HIDDEN, true)
+}
+
 function onItemClick(item) {
   if (!item.id) return
   trackPost(item.id, ACTION_TYPE.CLICK)
   router.push(`/post/${item.id}`)
 }
+
+onMounted(() => {
+  if (!hotHidden.value) loadHot(0)
+  // 从悬赏/大事件搜索栏跳转而来，携带 ?q= 预填并搜索
+  const q = String(route.query.q ?? '').trim()
+  if (q) {
+    keyword.value = q
+    runSearch(q)
+  }
+})
 
 onBeforeUnmount(() => {
   debouncedSearch.cancel()
@@ -169,27 +232,61 @@ onBeforeUnmount(() => {
       />
     </div>
 
-    <!-- 无搜索词：展示历史 -->
-    <div v-if="!hasResult" class="history">
-      <template v-if="history.length">
-        <div class="history__header">
-          <span class="history__title">搜索历史</span>
-          <van-icon name="delete-o" class="history__clear" @click="clearHistory" />
+    <!-- 无搜索词：展示历史 + 大家都在搜 + 快捷分类 -->
+    <div v-if="!hasResult" class="discover">
+      <!-- 大家都在搜 -->
+      <div v-if="!hotHidden && hotList.length" class="hot">
+        <div class="hot__header">
+          <span class="hot__title">大家都在搜</span>
+          <div class="hot__actions">
+            <span class="hot__action" @click="onHotRefresh">换一换</span>
+            <van-icon name="cross" class="hot__action" @click="onHotClose" />
+          </div>
         </div>
-        <div class="history__tags">
-          <van-tag
-            v-for="h in history"
-            :key="h"
-            plain
-            type="primary"
-            size="medium"
-            @click="onHistoryClick(h)"
-          >
-            {{ h }}
-          </van-tag>
+        <div class="hot__tags">
+          <span
+            v-for="h in hotList"
+            :key="h.id"
+            class="hot__tag pressable"
+            @click="onHotClick(h)"
+          >{{ h.title }}</span>
         </div>
-      </template>
-      <van-empty v-else description="暂无搜索历史" />
+      </div>
+
+      <!-- 快捷分类胶囊：浅蓝底深蓝字 -->
+      <div class="quick">
+        <div class="quick__header">快捷分类</div>
+        <div class="quick__tags">
+          <span
+            v-for="t in QUICK_TYPES"
+            :key="t.key"
+            class="quick__capsule pressable"
+            @click="onQuickType(t)"
+          >{{ t.label }}</span>
+        </div>
+      </div>
+
+      <!-- 搜索历史 -->
+      <div class="history">
+        <template v-if="history.length">
+          <div class="history__header">
+            <span class="history__title">搜索历史</span>
+            <van-icon name="delete-o" class="history__clear" @click="clearHistory" />
+          </div>
+          <div class="history__tags">
+            <van-tag
+              v-for="h in history"
+              :key="h"
+              plain
+              type="primary"
+              size="medium"
+              @click="onHistoryClick(h)"
+            >
+              {{ h }}
+            </van-tag>
+          </div>
+        </template>
+      </div>
     </div>
 
     <!-- 有搜索词：展示结果 -->
@@ -244,8 +341,81 @@ onBeforeUnmount(() => {
   background: var(--color-card);
 }
 
-.history {
+.discover {
   padding: 12px var(--page-margin);
+}
+
+.hot {
+  padding: 12px var(--page-margin);
+  background: var(--color-card);
+  border-radius: var(--radius-card);
+}
+
+.hot__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.hot__title {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-card-title);
+  color: var(--color-text-primary);
+}
+
+.hot__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--font-size-aux);
+  color: var(--color-text-secondary);
+}
+
+.hot__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.hot__tag {
+  padding: 4px 14px;
+  font-size: var(--font-size-aux);
+  color: var(--color-text-primary);
+  background: var(--color-bg);
+  border-radius: 999px;
+}
+
+.quick {
+  margin-top: 14px;
+  padding: 12px var(--page-margin);
+  background: var(--color-card);
+  border-radius: var(--radius-card);
+}
+
+.quick__header {
+  margin-bottom: 12px;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-card-title);
+  color: var(--color-text-primary);
+}
+
+.quick__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quick__capsule {
+  padding: 5px 16px;
+  font-size: var(--font-size-aux);
+  color: #1d4f8f;                 /* 深蓝字 */
+  background: #e3efff;            /* 浅蓝底 */
+  border-radius: 999px;
+}
+
+.history {
+  margin-top: 14px;
 }
 
 .history__header {

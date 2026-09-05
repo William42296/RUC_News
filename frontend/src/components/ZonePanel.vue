@@ -1,18 +1,17 @@
 <script setup>
 import { ref } from 'vue'
 import { getLatest } from '@/api'
-import { CATEGORY_NAMES } from '@/constants'
+import { ZONES } from '@/constants'
 import PostList from '@/components/PostList.vue'
 
 defineOptions({ name: 'ZonePanel' })
 
-// 分区 id 1-4（对齐后端 config.py CATEGORY_NAMES）
-const zones = Object.entries(CATEGORY_NAMES).map(([id, name]) => ({ id: Number(id), name }))
-const activeZone = ref(1)
+// 36 内容分区（对齐后端 config.py ZONE_NAMES）
+const activeZone = ref(21) // 默认资讯
 
-// 分区帖子：后端 /latest 支持 category 过滤（对齐 routes/main.py）
+// 分区帖子：后端 /latest 支持 zone 过滤（对齐 routes/main.py）
 function zoneFetcher(params) {
-  return getLatest({ ...params, category: activeZone.value })
+  return getLatest({ ...params, zone: activeZone.value })
 }
 </script>
 
@@ -20,7 +19,7 @@ function zoneFetcher(params) {
   <div class="zone-panel">
     <div class="zone-bar">
       <span
-        v-for="z in zones"
+        v-for="z in ZONES"
         :key="z.id"
         class="zone-chip pressable"
         :class="{ 'is-active': z.id === activeZone }"
@@ -43,9 +42,9 @@ function zoneFetcher(params) {
 
 .zone-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px var(--page-margin);
-  overflow-x: auto;
 }
 
 .zone-chip {

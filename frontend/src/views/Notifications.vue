@@ -1,4 +1,5 @@
 <script setup>
+import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { getNotifications, readAllNotifications } from '@/api'
 import { usePagedList } from '@/composables/usePagedList'
@@ -9,6 +10,7 @@ import { CACHE_KEYS } from '@/constants'
 
 defineOptions({ name: 'Notifications' })
 
+const router = useRouter()
 const notificationStore = useNotificationStore()
 
 const { items, loading, refreshing, finished, loaded, error, loadFirst, refresh, loadMore } =
@@ -23,9 +25,21 @@ const { items, loading, refreshing, finished, loaded, error, loadFirst, refresh,
     }
   })
 
-// —— 点击单条：本地标记已读（后端暂无单条已读接口，消息不含 post_id 故不跳转）——
+// —— 消息类型文案/配色：赞 / 回复 / 金币到账 ——
+const TYPE_CLASS = {
+  like: 'type-like',
+  comment: 'type-comment',
+  coin: 'type-coin'
+}
+
+function typeClass(type) {
+  return TYPE_CLASS[type] || 'type-system'
+}
+
+// —— 点击单条：本地标记已读；有 post_id 则跳详情 ——
 function onItemClick(item) {
   if (item && !item.read) item.read = true
+  if (item?.postId) router.push(`/post/${item.postId}`)
 }
 
 // —— 一键已读 ——
@@ -75,8 +89,13 @@ async function onReadAll() {
         >
           <span v-if="!item.read" class="msg__dot" />
           <div class="msg__main">
+            <div class="msg__head">
+              <span class="msg__type" :class="typeClass(item.type)">
+                {{ item.typeText || '消息' }}
+              </span>
+              <span class="msg__time">{{ fromNow(item.time) }}</span>
+            </div>
             <div class="msg__title">{{ item.content }}</div>
-            <div class="msg__time">{{ fromNow(item.time) }}</div>
           </div>
         </div>
 
@@ -135,14 +154,48 @@ async function onReadAll() {
   min-width: 0;
 }
 
+.msg__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.msg__type {
+  padding: 1px 10px;
+  font-size: 11px;
+  border-radius: 999px;
+  line-height: 1.7;
+}
+
+.type-like {
+  color: #b03a2e;
+  background: rgba(176, 58, 46, 0.12);
+}
+
+.type-comment {
+  color: #4a90d9;
+  background: rgba(74, 144, 217, 0.12);
+}
+
+.type-coin {
+  color: #c99335;
+  background: rgba(201, 147, 53, 0.14);
+}
+
+.type-system {
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+}
+
 .msg__title {
+  margin-top: 6px;
   font-size: var(--font-size-body);
   color: var(--color-text-primary);
   word-break: break-word;
 }
 
 .msg__time {
-  margin-top: 6px;
   font-size: var(--font-size-aux);
   color: var(--color-text-secondary);
 }

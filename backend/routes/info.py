@@ -6,6 +6,9 @@ from models import Message, SessionLocal
 
 info_bp = Blueprint("info", __name__)
 
+# 消息类型文案：前端据此渲染「赞 / 回复 / 金币到账」样式
+TYPE_TEXT = {"like": "赞", "comment": "回复", "coin": "金币到账", "system": "系统"}
+
 
 @info_bp.route("/notifications")
 def notifications():
@@ -21,7 +24,8 @@ def notifications():
         return jsonify(ok({
             "notifications": [
                 {"id": m.id, "sender_id": m.sender_id, "content": m.content,
-                 "type": m.type, "is_read": m.is_read,
+                 "type": m.type, "type_text": TYPE_TEXT.get(m.type, m.type),
+                 "post_id": m.post_id, "is_read": m.is_read,
                  "created_at": m.created_at.isoformat() if m.created_at else None}
                 for m in msgs],
             "total": total,

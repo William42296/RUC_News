@@ -6,10 +6,11 @@ from datetime import datetime, timedelta
 import requests
 
 from config import (
-    AUTH_FAIL_CODE, CRAWLER_BASE_URL, CRAWLER_ENDPOINTS, CRAWLER_HEADERS,
-    CRAWLER_SESSION_FILE, DATA_RETENTION_DAYS, SESSION_COOKIE_NAME,
+    AUTH_FAIL_CODE, BULK_CRAWL_THRESHOLD, CRAWLER_BASE_URL, CRAWLER_ENDPOINTS,
+    CRAWLER_HEADERS, CRAWLER_SESSION_FILE, DATA_RETENTION_DAYS,
+    SESSION_COOKIE_NAME,
 )
-from models import Message, Post, SessionLocal, UserAction
+from models import Comment, Message, Post, SessionLocal, UserAction
 
 
 class AuthError(Exception):
@@ -63,11 +64,11 @@ def fetch_detail(article_id):
 
 
 def save_posts(raw_posts):
-    """清洗 + 分区归类 + 入库（按源 id 去重），返回新入库 id 列表。"""
-    from utils.recommender import classify
+    """清洗 + 分区/类型归类 + 入库（按源 id 去重），返回新入库的 (source_id, db_id) 列表。"""
+    from utils.recommender import classify, detect_post_type
 
     db = SessionLocal()
-    ids = []
+    saved = []
     for p in raw_posts:
         sid = p.get("id")
         if not sid:
@@ -78,19 +79,22 @@ def save_posts(raw_posts):
         if not detail:
             continue
         title = (p.get("title") or "").strip() or detail[:30]
-        category = classify(detail, source_name=p.get("category_name") or "")
-        db.add(Post(
-            source_id=sid, title=title, content=detail, category=category,
-            source_category_id=p.get("category_id"),
-            source_category_name=p.get("category_name") or "",
-            hot=p.get("hot") or 0,
-            post_type=_post_type(category, p.get("category_name") or ""), source_url=CRAWLER_BASE_URL,
+        source_name = p.get("category_name") or ""
+        zone = classify(detail, source_name=source_name)
+        ptype = detect_post_type(title, detail, source_name=source_name)
+        post = Post(
+            source_id=sid, title=title, content=detail, category=zone,
+            zone=zone, source_category_id=p.get("category_id"),
+            source_category_name=source_name,
+            hot=p.get("hot") or 0, post_type=ptype, source_url=CRAWLER_BASE_URL,
             created_at=_parse_time(p.get("create_time")),
-        ))
-        ids.append(sid)
+        )
+        db.add(post)
+        db.flush()  # 取得 post.id 供评论关联
+        saved.append((sid, post.id))
     db.commit()
     db.close()
-    return ids
+    return saved
 
 
 def _parse_time(s):
@@ -102,32 +106,97 @@ def _parse_time(s):
         return datetime.now()
 
 
-def _type_of(category):
-    return {2: "secondhand", 3: "lost", 4: "team"}.get(category, "normal")
+def save_comments(source_post_id, raw_comment_list):
+    """解析 comment_list，写入 Comment（question/answer 楼中楼），返回结构化数组。
+
+    detail → answer；reply_comment_id → question（0 → 无（初始帖子评论），否则回溯父评论 detail）。
+    """
+    by_source = {c.get("id"): c for c in raw_comment_list if c.get("id") is not None}
+    structured = []
+    db = SessionLocal()
+    try:
+        for c in raw_comment_list:
+            cid = c.get("id")
+            answer = (c.get("detail") or "").strip()
+            if not answer:
+                continue
+            reply_id = c.get("reply_comment_id") or 0
+            if reply_id and reply_id in by_source:
+                question = (by_source[reply_id].get("detail") or "").strip()
+            else:
+                question = "无（初始帖子评论）"
+            structured.append({"question": question, "answer": answer})
+
+            # 入库（按源评论 id 去重）
+            exists = db.query(Comment).filter(Comment.source_id == cid).first()
+            if exists:
+                continue
+            db.add(Comment(
+                post_id=source_post_id, user_id=0, content=answer,
+                reply_comment_id=int(reply_id) if reply_id else 0, source_id=cid,
+                created_at=_parse_time(c.get("create_time")),
+            ))
+        db.commit()
+    finally:
+        db.close()
+    return structured
 
 
-# 源平台「公告/大事」类分区 → 大事件（post_type=event，供 /events 时间轴）
-EVENT_SOURCE_CATEGORIES = {"反诈提醒", "放假", "新闻科研公示", "推免"}
+def crawl_comments_for_new(pairs, limit_per_post=50):
+    """对新增帖子抓取评论，返回 {source_id: [{question, answer}]}。"""
+    result = {}
+    for sid, db_id in pairs:
+        try:
+            detail = fetch_detail(sid)
+            raw = detail.get("comment_list") or []
+            structured = save_comments(db_id, raw[:limit_per_post])
+            result[sid] = structured
+        except AuthError:
+            raise
+        except Exception as e:
+            print(f"[crawler] 评论抓取失败 sid={sid}: {e}", flush=True)
+    return result
 
 
-def _post_type(category, source_name):
-    """公告类源分区标为 event，其余按分区映射。"""
-    if source_name in EVENT_SOURCE_CATEGORIES:
-        return "event"
-    return _type_of(category)
+def _bulk_fetch():
+    """分页全量抓取 latest，直到空页。"""
+    all_posts = []
+    page = 1
+    while True:
+        batch = fetch_list("latest", page=page, limit=50)
+        if not batch:
+            break
+        all_posts.extend(batch)
+        page += 1
+        if page > 1000:  # 安全上限
+            break
+    return all_posts
 
 
 def run():
-    """抓取 latest + hot，入库并触发推荐矩阵更新。"""
+    """全量（<阈值）或增量抓取，入库 + 评论 + 触发推荐矩阵更新。"""
     try:
-        posts = []
-        for kind in ("latest", "hot"):
-            posts.extend(fetch_list(kind))
-        ids = save_posts(posts)
-        print(f"[crawler] 抓取完成，新增 {len(ids)} 条", flush=True)
+        db = SessionLocal()
+        try:
+            count = db.query(Post).count()
+        finally:
+            db.close()
+
+        if count < BULK_CRAWL_THRESHOLD:
+            raw = _bulk_fetch()
+            mode = "全量"
+        else:
+            raw = fetch_list("latest", page=1, limit=20)
+            mode = "增量"
+
+        pairs = save_posts(raw)
+        comments = crawl_comments_for_new(pairs)
+        n_comments = sum(len(v) for v in comments.values())
+        print(f"[crawler] {mode}抓取完成，新增 {len(pairs)} 条、评论 {n_comments} 条", flush=True)
+
         from utils.recommender import update_matrix
         update_matrix()
-        return ids
+        return pairs
     except AuthError as e:
         print(f"[crawler] 登录失效: {e} —— 请运行 mitm_proxy 或手动更新 session.json", flush=True)
         return []
@@ -139,7 +208,8 @@ def cleanup_old(days=DATA_RETENTION_DAYS):
     db = SessionLocal()
     for model, col in ((Post, Post.created_at),
                        (UserAction, UserAction.timestamp),
-                       (Message, Message.created_at)):
+                       (Message, Message.created_at),
+                       (Comment, Comment.created_at)):
         n = db.query(model).filter(col < cutoff).delete()
         print(f"[cleanup] 删除 {model.__name__} {n} 条过期记录")
     db.commit()

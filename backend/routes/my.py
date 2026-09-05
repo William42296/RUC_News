@@ -6,10 +6,19 @@ import jwt
 from flask import Blueprint, g, jsonify, request
 
 from config import JWT_ALGO, JWT_EXPIRE_HOURS, SECRET_KEY, err, ok
-from models import SessionLocal, User, UserAction
+from models import (CoinTransaction, Comment, Like, Post, SessionLocal, User,
+                    UserAction)
 from utils import crawler, recommender
 
 my_bp = Blueprint("my", __name__, url_prefix="/my")
+
+
+def _serialize_post(p):
+    return {
+        "id": p.id, "title": p.title, "content": p.content[:100],
+        "zone": p.zone, "post_type": p.post_type, "hot": p.hot,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+    }
 
 
 @my_bp.route("/login", methods=["POST"])
@@ -52,3 +61,99 @@ def feedback():
 
     recommender.update_matrix()
     return jsonify(ok())
+
+
+@my_bp.route("/posts")
+def my_posts():
+    """我发：我发布的帖子。"""
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 20))
+    db = SessionLocal()
+    try:
+        q = db.query(Post).filter(Post.owner_id == g.user_id)
+        total = q.count()
+        posts = (q.order_by(Post.created_at.desc())
+                 .offset((page - 1) * limit).limit(limit).all())
+        return jsonify(ok({
+            "posts": [_serialize_post(p) for p in posts],
+            "total": total, "page": page,
+            "has_more": page * limit < total,
+        }))
+    finally:
+        db.close()
+
+
+@my_bp.route("/replies")
+def my_replies():
+    """我回：我发布的评论（含所属帖子）。"""
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 20))
+    db = SessionLocal()
+    try:
+        q = db.query(Comment).filter(Comment.user_id == g.user_id)
+        total = q.count()
+        rows = (q.order_by(Comment.created_at.desc())
+                .offset((page - 1) * limit).limit(limit).all())
+        items = []
+        for c in rows:
+            post = db.get(Post, c.post_id)
+            items.append({
+                "id": c.id, "content": c.content, "post_id": c.post_id,
+                "post_title": post.title if post else "",
+                "reply_comment_id": c.reply_comment_id,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            })
+        return jsonify(ok({
+            "replies": items, "total": total, "page": page,
+            "has_more": page * limit < total,
+        }))
+    finally:
+        db.close()
+
+
+@my_bp.route("/likes")
+def my_likes():
+    """我赞：我点赞过的帖子。"""
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 20))
+    db = SessionLocal()
+    try:
+        q = (db.query(Post).join(Like, Like.post_id == Post.id)
+             .filter(Like.user_id == g.user_id))
+        total = q.count()
+        posts = (q.order_by(Like.created_at.desc())
+                 .offset((page - 1) * limit).limit(limit).all())
+        return jsonify(ok({
+            "posts": [_serialize_post(p) for p in posts],
+            "total": total, "page": page,
+            "has_more": page * limit < total,
+        }))
+    finally:
+        db.close()
+
+
+@my_bp.route("/coins")
+def my_coins():
+    """代币余额 + 流水。"""
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 20))
+    db = SessionLocal()
+    try:
+        user = db.get(User, g.user_id)
+        balance = user.coins if user else 0
+        q = db.query(CoinTransaction).filter(CoinTransaction.user_id == g.user_id)
+        total = q.count()
+        txs = (q.order_by(CoinTransaction.created_at.desc())
+               .offset((page - 1) * limit).limit(limit).all())
+        return jsonify(ok({
+            "balance": balance,
+            "transactions": [
+                {"id": t.id, "amount": t.amount, "reason": t.reason,
+                 "post_id": t.post_id,
+                 "created_at": t.created_at.isoformat() if t.created_at else None}
+                for t in txs],
+            "total": total, "page": page,
+            "has_more": page * limit < total,
+        }))
+    finally:
+        db.close()

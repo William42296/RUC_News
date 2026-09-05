@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getPostDetail, publishComment } from '@/api'
+import { getPostDetail, publishComment, likePost } from '@/api'
 import { getCache, setCache } from '@/utils/cache'
 import { normalizePost, normalizeComment } from '@/utils/normalize'
 import { CACHE_KEYS, ACTION_TYPE } from '@/constants'
@@ -23,17 +23,19 @@ const cacheKey = `${CACHE_KEYS.POST_DETAIL}:${postId}`
 const post = ref(null)
 const comments = ref([])
 const commentCount = ref(0)
+const likeCount = ref(0)
+const liked = ref(false)
+const liking = ref(false)
 const loaded = ref(false)
 const error = ref(false)
 
 const commentText = ref('')
 const sending = ref(false)
 
-// —— 详情响应解析：后端返回扁平帖子对象（含 comments_count，无评论列表）——
+// —— 详情响应解析：后端返回扁平帖子对象（含 comments / like_count / liked）——
 function parseDetail(res) {
   const data = res?.data
   const rawPost = data?.post ?? data ?? null
-  // 后端暂无「评论列表」接口，历史评论无法拉取；仅本会话新发评论上屏
   const rawComments = data?.comments ?? data?.comment_list ?? rawPost?.comments ?? []
   return {
     post: normalizePost(rawPost),
@@ -46,7 +48,26 @@ function apply(payload) {
   comments.value = payload.comments || []
   commentCount.value =
     Number(payload.post?.commentCount) || 0 || comments.value.length
+  likeCount.value = Number(payload.post?.likeCount) || 0
+  liked.value = Boolean(payload.post?.liked)
   loaded.value = true
+}
+
+// —— 点赞（幂等，后端返回最新 like_count）——
+async function onLike() {
+  if (liking.value) return
+  liking.value = true
+  try {
+    const res = await likePost(postId)
+    liked.value = true
+    const n = Number(res?.data?.like_count)
+    if (Number.isFinite(n)) likeCount.value = n
+    else likeCount.value += 1
+  } catch (e) {
+    showToast('点赞失败')
+  } finally {
+    liking.value = false
+  }
 }
 
 async function loadDetail() {
@@ -99,12 +120,11 @@ async function onSendComment() {
   sending.value = true
 
   try {
-    // 字段名以后端 config.py 为准，集中在此调整
     const res = await publishComment({ post_id: postId, content })
-    const saved = normalizeComment(res?.data?.comment ?? res?.data ?? null)
+    const cid = res?.data?.comment_id
     comments.value = comments.value.map((c) => {
       if (c.id !== tempId) return c
-      return saved && saved.id ? { ...saved, pending: false } : { ...c, pending: false }
+      return { ...c, id: cid || c.id, pending: false }
     })
   } catch (e) {
     // 失败回滚
@@ -137,8 +157,12 @@ async function onSendComment() {
         <h1 class="detail__title">{{ post.title }}</h1>
 
         <div class="detail__meta">
-          <span v-if="post.category" class="detail__tag">{{ post.category }}</span>
+          <span v-if="post.categoryName" class="detail__tag">{{ post.categoryName }}</span>
           <span class="detail__time">{{ fromNow(post.time) }}</span>
+          <span class="detail__like pressable" :class="{ 'is-liked': liked }" @click="onLike">
+            <van-icon :name="liked ? 'good-job' : 'good-job-o'" />
+            {{ likeCount }}
+          </span>
         </div>
 
         <p class="detail__content">
@@ -167,6 +191,7 @@ async function onSendComment() {
               {{ c.pending ? '发送中…' : fromNow(c.time) }}
             </span>
           </div>
+          <div v-if="c.question" class="comment__quote">{{ c.question }}</div>
           <p class="comment__content">{{ c.content }}</p>
         </div>
       </div>
@@ -232,6 +257,21 @@ async function onSendComment() {
   line-height: 1.6;
 }
 
+.detail__like {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 3px 12px;
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+}
+
+.detail__like.is-liked {
+  color: var(--color-primary);
+}
+
 .detail__content {
   margin: 14px 0 0;
   font-size: var(--font-size-body);
@@ -277,6 +317,17 @@ async function onSendComment() {
   margin: 6px 0 0;
   font-size: var(--font-size-body);
   color: var(--color-text-primary);
+  word-break: break-word;
+}
+
+.comment__quote {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  font-size: var(--font-size-aux);
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border-left: 3px solid var(--color-divider);
+  border-radius: 4px;
   word-break: break-word;
 }
 

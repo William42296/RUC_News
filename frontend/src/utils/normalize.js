@@ -2,7 +2,7 @@
  * 后端字段名 → 前端统一结构 的映射层（对齐 config.py / models.py / routes/*.py）
  */
 
-import { CATEGORY_NAMES } from '@/constants'
+import { ZONE_NAMES } from '@/constants'
 
 function pick(obj, keys) {
   for (const key of keys) {
@@ -20,33 +20,43 @@ function pick(obj, keys) {
 export function normalizePost(raw) {
   if (!raw) return null
   const content = pick(raw, ['content', 'body', 'text', 'detail']) || ''
-  const category = pick(raw, ['category'])
+  const zone = Number(pick(raw, ['zone']))
+  const category = Number(pick(raw, ['category']))
   return {
     id: pick(raw, ['id', 'post_id', 'pid']),
     title: pick(raw, ['title', 'subject']) || '',
     // 后端列表接口的 content 已截断为 100 字，直接作为卡片摘要；详情页用 content 完整正文
     summary: pick(raw, ['summary', 'excerpt', 'description']) || content.slice(0, 100),
     content,
-    category,
-    categoryName: pick(raw, ['category_name', 'categoryName']) || CATEGORY_NAMES[category] || '',
+    zone: zone || null,
+    category: category || zone || null,
+    categoryName: pick(raw, ['category_name', 'categoryName', 'source_category_name'])
+      || ZONE_NAMES[zone] || ZONE_NAMES[category] || '',
     postType: pick(raw, ['post_type', 'postType']) || '',
+    status: pick(raw, ['status']) || 'unfinished',
+    reward: Number(pick(raw, ['reward']) || 0),
+    teamCur: Number(pick(raw, ['team_cur', 'teamCur']) || 0),
+    teamTotal: Number(pick(raw, ['team_total', 'teamTotal']) || 0),
+    likeCount: Number(pick(raw, ['like_count', 'likeCount']) || 0),
+    liked: Boolean(pick(raw, ['liked'])),
     time: pick(raw, ['created_at', 'create_time', 'publish_time', 'published_at', 'date', 'time']),
     commentCount: Number(
-      pick(raw, ['comments_count', 'comment_count', 'commentCount', 'reply_count', 'comments']) || 0
+      pick(raw, ['comments_count', 'comment_count', 'commentCount', 'reply_count']) || 0
     ),
     raw
   }
 }
 
 /**
- * 归一化评论结构（详情页）
- * 注：后端目前仅 POST /comment 写入、详情返回 comments_count，暂无评论列表接口。
+ * 归一化评论结构（详情页，后端已结构化 question/answer）
  */
 export function normalizeComment(raw) {
   if (!raw) return null
   return {
     id: pick(raw, ['id', 'comment_id', 'cid']),
-    content: pick(raw, ['content', 'body', 'text']) || '',
+    content: pick(raw, ['content', 'body', 'text', 'answer']) || '',
+    question: pick(raw, ['question']) || '',
+    replyCommentId: pick(raw, ['reply_comment_id', 'replyCommentId']),
     author: pick(raw, ['author', 'nickname', 'user_name', 'name', 'username']) || '',
     time: pick(raw, ['created_at', 'create_time', 'time'])
   }
@@ -61,6 +71,7 @@ export function normalizeNotification(raw) {
   return {
     id: pick(raw, ['id', 'notification_id', 'nid']),
     type: pick(raw, ['type', 'category', 'action_type']) || '',
+    typeText: pick(raw, ['type_text', 'typeText']) || '',
     title: pick(raw, ['title', 'subject']) || '',
     content: pick(raw, ['content', 'body', 'text', 'message']) || '',
     time: pick(raw, ['created_at', 'create_time', 'time']),

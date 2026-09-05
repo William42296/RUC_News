@@ -47,6 +47,12 @@ const routes = [
     component: () => import('@/views/post/detail.vue'),
     meta: { title: '帖子详情', requiresAuth: true }
   },
+  {
+    path: '/event/:id',
+    name: 'event-detail',
+    component: () => import('@/views/post/EventDetail.vue'),
+    meta: { title: '大事件详情' }
+  },
   // 兜底重定向
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]

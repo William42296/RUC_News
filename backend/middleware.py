@@ -7,7 +7,8 @@ from flask import g, jsonify, request
 from config import JWT_ALGO, SECRET_KEY
 
 # 无需鉴权的路径（对齐接口清单中标记 ❌ 的接口）
-PUBLIC_PATHS = {"/", "/my/login", "/latest", "/bounty", "/events", "/categories", "/search"}
+PUBLIC_PATHS = {"/", "/my/login", "/latest", "/bounty", "/events", "/categories",
+                "/zones", "/search", "/search/hot"}
 
 
 def _unauth(message="Token 无效或已过期"):
@@ -18,7 +19,8 @@ def auth_middleware(app):
     @app.before_request
     def _auth():
         path = request.path
-        if path in PUBLIC_PATHS or path.startswith("/post/") or path.startswith("/public"):
+        if path in PUBLIC_PATHS or path.startswith("/post/") or path.startswith("/public") \
+                or path.startswith("/events/"):
             return None
         header = request.headers.get("Authorization", "")
         token = header[7:] if header.startswith("Bearer ") else None

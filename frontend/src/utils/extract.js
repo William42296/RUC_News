@@ -14,6 +14,9 @@ export function extractList(res) {
   if (data && Array.isArray(data.notifications)) return data.notifications
   if (data && Array.isArray(data.events)) return data.events
   if (data && Array.isArray(data.categories)) return data.categories
+  if (data && Array.isArray(data.zones)) return data.zones
+  if (data && Array.isArray(data.replies)) return data.replies
+  if (data && Array.isArray(data.hot)) return data.hot
   if (data && Array.isArray(data.list)) return data.list
   if (data && Array.isArray(data.items)) return data.items
   if (data && Array.isArray(data.results)) return data.results

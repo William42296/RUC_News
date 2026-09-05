@@ -23,10 +23,9 @@
         <PostCard :post="item" />
       </div>
 
-      <van-list
-        v-model:loading="loading"
+      <InfiniteSentinel
+        :loading="loading"
         :finished="finished"
-        :immediate-check="false"
         finished-text="—— 没有更多了 ——"
         loading-text="加载中..."
         @load="loadMore"
@@ -38,6 +37,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import PostCard from '@/components/PostCard.vue'
+import InfiniteSentinel from '@/components/InfiniteSentinel.vue'
 import { usePagedList } from '@/composables/usePagedList'
 import { normalizePost } from '@/utils/normalize'
 import { trackPost } from '@/utils/tracker'

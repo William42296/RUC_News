@@ -1,4 +1,14 @@
 <template>
+  <!-- 撕裂纸边沿滤镜：feTurbulence + feDisplacementMap 生成不规则毛边 -->
+  <svg class="torn-filter" aria-hidden="true" focusable="false">
+    <defs>
+      <filter id="paper-torn" x="-15%" y="-15%" width="130%" height="130%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="9" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  </svg>
+
   <van-pull-refresh v-model="refreshing" @refresh="refresh">
     <!-- 骨架屏 -->
     <div v-if="!loaded && !error" class="bounty-grid">
@@ -26,11 +36,17 @@
         >
           <!-- 羊皮纸主体 -->
           <div class="parchment">
+            <!-- 撕裂边沿纸层（滤镜位移，文字层不受影响） -->
+            <div class="parchment__paper" aria-hidden="true"></div>
+
             <div class="parchment__task ellipsis-3">{{ item.title }}</div>
 
-            <!-- 状态印章 -->
+            <!-- 状态印章（圆形双环） -->
             <div class="seal" :class="item.status === 'finished' ? 'seal--done' : 'seal--todo'">
-              {{ item.status === 'finished' ? '已完成' : '未完成' }}
+              <span
+                v-for="(ch, i) in (item.status === 'finished' ? '已完成' : '未完成')"
+                :key="i"
+              >{{ ch }}</span>
             </div>
 
             <!-- 接单/领取按钮 -->
@@ -55,10 +71,9 @@
         </div>
       </div>
 
-      <van-list
-        v-model:loading="loading"
+      <InfiniteSentinel
+        :loading="loading"
         :finished="finished"
-        :immediate-check="false"
         finished-text="—— 没有更多了 ——"
         loading-text="加载中..."
         @load="loadMore"
@@ -75,6 +90,7 @@ import { usePagedList } from '@/composables/usePagedList'
 import { normalizePost } from '@/utils/normalize'
 import { CACHE_KEYS, ACTION_TYPE } from '@/constants'
 import { trackPost } from '@/utils/tracker'
+import InfiniteSentinel from '@/components/InfiniteSentinel.vue'
 
 const props = defineProps({
   type: { type: String, default: 'lost' },
@@ -108,74 +124,101 @@ function onAccept(item) {
 <style scoped>
 .bounty-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fill, 160px);
   gap: 12px;
   padding: 8px var(--page-margin) 0;
+  justify-content: center;
 }
 
 .skeleton-card {
+  width: 160px;
+  height: 160px;
+  box-sizing: border-box;
   padding: 14px;
   background: var(--color-card);
   border-radius: var(--radius-card);
-  aspect-ratio: 1;
 }
 
 .bounty-card {
   display: flex;
   flex-direction: column;
+  width: 160px;
+  height: 160px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.torn-filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 
 .parchment {
   position: relative;
-  aspect-ratio: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 16px 12px 44px;
+  padding: 18px 16px 44px;
+}
+
+/* 撕裂边沿纸层：纹理/毛边由滤镜位移产生，文字层与其分离 */
+.parchment__paper {
+  position: absolute;
+  inset: 3px;
   background:
     radial-gradient(circle at 30% 20%, rgba(160, 120, 60, 0.10), transparent 60%),
     radial-gradient(circle at 75% 85%, rgba(120, 80, 30, 0.14), transparent 55%),
     linear-gradient(135deg, #f3e4bd, #ead2a0 60%, #f0ddb3);
   border: 1px solid #c9a86a;
-  border-radius: 10px;
-  box-shadow:
-    inset 0 0 18px rgba(139, 95, 30, 0.22),
-    0 3px 8px rgba(139, 95, 30, 0.25);
+  box-shadow: inset 0 0 18px rgba(139, 95, 30, 0.22);
+  filter: url(#paper-torn) drop-shadow(0 3px 6px rgba(139, 95, 30, 0.35));
 }
 
 .parchment__task {
+  position: relative;
   font-family: "STKaiti", "KaiTi", "楷体", serif;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   color: #5b3a12;
 }
 
 .seal {
   position: absolute;
-  left: 12px;
-  bottom: 12px;
-  display: inline-flex;
+  left: 10px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 8px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   font-family: "STKaiti", "KaiTi", "楷体", serif;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  transform: rotate(-8deg);
-  writing-mode: vertical-rl;
-  letter-spacing: 2px;
-  border: 3px double currentColor;
+  line-height: 1.2;
+  transform: rotate(-12deg);
+  border: 2.5px solid currentColor;
+}
+
+/* 内圈：模拟真实圆形印章的双环 */
+.seal::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
 }
 
 .seal--todo {
-  color: #b03a2e;
-  background: rgba(176, 58, 46, 0.08);
+  color: #c0392b;
 }
 
 .seal--done {
-  color: #3f7a3a;
-  background: rgba(63, 122, 58, 0.08);
+  color: #2e7d32;
 }
 
 .accept-btn {
@@ -183,7 +226,7 @@ function onAccept(item) {
   right: 10px;
   bottom: 12px;
   padding: 6px 14px;
-  font-size: var(--font-size-aux);
+  font-size: 16px;
   color: #fff;
   background: linear-gradient(180deg, #b0472f, #8b1a1a);
   border: none;
@@ -197,7 +240,8 @@ function onAccept(item) {
   justify-content: center;
   gap: 6px;
   padding: 8px 4px 0;
-  font-size: var(--font-size-aux);
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--color-text-secondary);
 }
 

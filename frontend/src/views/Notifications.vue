@@ -7,6 +7,7 @@ import { normalizeNotification } from '@/utils/normalize'
 import { useNotificationStore } from '@/stores/notification'
 import { fromNow } from '@/utils/format'
 import { CACHE_KEYS } from '@/constants'
+import InfiniteSentinel from '@/components/InfiniteSentinel.vue'
 
 defineOptions({ name: 'Notifications' })
 
@@ -99,10 +100,9 @@ async function onReadAll() {
           </div>
         </div>
 
-        <van-list
-          v-model:loading="loading"
+        <InfiniteSentinel
+          :loading="loading"
           :finished="finished"
-          :immediate-check="false"
           finished-text="—— 没有更多了 ——"
           loading-text="加载中..."
           @load="loadMore"

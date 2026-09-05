@@ -62,6 +62,12 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.ellipsis-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 /* —— 关键词高亮（搜索结果）—— */
 .highlight {

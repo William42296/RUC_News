@@ -5,7 +5,7 @@ import time
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func
 
-from config import HOT_SEARCH_N, KEY_SEARCH, SEARCH_TTL, ok, redis_client
+from config import GET_OR_SET, HOT_SEARCH_N, KEY_SEARCH, SEARCH_TTL, ok, redis_client
 from models import Post, SessionLocal, UserAction
 
 search_bp = Blueprint("search", __name__, url_prefix="/search")
@@ -52,7 +52,7 @@ def search():
         })
     finally:
         db.close()
-    redis_client.set(cache_key, json.dumps(resp), ex=SEARCH_TTL)
+    GET_OR_SET(keys=[cache_key], args=[json.dumps(resp), SEARCH_TTL])
     return jsonify(resp)
 
 

@@ -10,6 +10,7 @@ import { normalizePost } from '@/utils/normalize'
 import { CACHE_KEYS, SEARCH_HISTORY_MAX, ACTION_TYPE } from '@/constants'
 import { trackPost } from '@/utils/tracker'
 import PostCard from '@/components/PostCard.vue'
+import InfiniteSentinel from '@/components/InfiniteSentinel.vue'
 
 // keep-alive 依赖组件名缓存
 defineOptions({ name: 'Search' })
@@ -320,10 +321,9 @@ onBeforeUnmount(() => {
           <PostCard :post="item" :keyword="submittedKeyword" />
         </div>
 
-        <van-list
-          v-model:loading="loading"
+        <InfiniteSentinel
+          :loading="loading"
           :finished="finished"
-          :immediate-check="false"
           finished-text="—— 没有更多了 ——"
           loading-text="加载中..."
           @load="loadMore"

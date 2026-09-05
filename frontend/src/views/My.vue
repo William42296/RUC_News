@@ -9,6 +9,7 @@ import { extractList } from '@/utils/extract'
 import { normalizePost } from '@/utils/normalize'
 import { fromNow } from '@/utils/format'
 import PostCard from '@/components/PostCard.vue'
+import InfiniteSentinel from '@/components/InfiniteSentinel.vue'
 
 defineOptions({ name: 'My' })
 
@@ -223,10 +224,9 @@ async function doClearCache() {
             </template>
             <PostCard v-else :post="item" />
           </div>
-          <van-list
-            v-model:loading="loading"
+          <InfiniteSentinel
+            :loading="loading"
             :finished="finished"
-            :immediate-check="false"
             finished-text="—— 没有更多了 ——"
             loading-text="加载中..."
             @load="loadMore"

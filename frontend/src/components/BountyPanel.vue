@@ -30,7 +30,7 @@ function onSearch(val) {
       @search="onSearch"
     />
 
-    <!-- 一级分类导航：[组队] | [事务招领] | [二手交易] -->
+    <!-- 一级分类导航：[组队] | [失物招领] | [二手交易] -->
     <div class="bounty-types">
       <span
         v-for="t in BOUNTY_TYPES"
@@ -75,7 +75,8 @@ function onSearch(val) {
   flex: 1;
   text-align: center;
   padding: 8px 0;
-  font-size: var(--font-size-body);
+  font-size: 16px;
+  line-height: 1.5;
   color: var(--color-text-secondary);
   background: var(--color-card);
   border: 1px solid var(--color-divider);
@@ -97,7 +98,8 @@ function onSearch(val) {
 
 .status-chip {
   padding: 4px 16px;
-  font-size: var(--font-size-aux);
+  font-size: 16px;
+  line-height: 1.5;
   color: var(--color-text-secondary);
   background: var(--color-card);
   border: 1px solid var(--color-divider);

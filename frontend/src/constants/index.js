@@ -69,7 +69,7 @@ export const ZONE_NAMES = Object.fromEntries(ZONES.map((z) => [z.id, z.name]))
 // —— 悬赏三大业务分类（对齐后端 BOUNTY_TYPE_LABELS）——
 export const BOUNTY_TYPES = [
   { key: 'team', label: '组队' },
-  { key: 'lost', label: '事务招领' },
+  { key: 'lost', label: '失物招领' },
   { key: 'secondhand', label: '二手交易' }
 ]
 

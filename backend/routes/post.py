@@ -3,7 +3,7 @@ import json
 
 from flask import Blueprint, g, jsonify, request
 
-from config import (DETAIL_TTL, KEY_LIST_HOT, KEY_LIST_LATEST,
+from config import (DETAIL_TTL, GET_OR_SET, KEY_LIST_HOT, KEY_LIST_LATEST,
                     KEY_NOTIF_UNREAD, KEY_POST_DETAIL, err, ok, redis_client)
 from models import (CoinTransaction, Comment, Like, Message, Post, SessionLocal,
                     User)
@@ -91,7 +91,7 @@ def detail(pid):
         })
     finally:
         db.close()
-    redis_client.set(key, json.dumps(resp), ex=DETAIL_TTL)
+    GET_OR_SET(keys=[key], args=[json.dumps(resp), DETAIL_TTL])
     return jsonify(resp)
 
 
@@ -152,9 +152,12 @@ def comment():
     finally:
         db.close()
 
+    # Pipeline：未读计数 + 详情缓存失效合并为一次往返
+    pipe = redis_client.pipeline()
     if author:
-        redis_client.incr(KEY_NOTIF_UNREAD.format(author))
-    redis_client.delete(KEY_POST_DETAIL.format(post_id))
+        pipe.incr(KEY_NOTIF_UNREAD.format(author))
+    pipe.delete(KEY_POST_DETAIL.format(post_id))
+    pipe.execute()
     return jsonify(ok({"comment_id": comment_id}))
 
 
@@ -189,7 +192,9 @@ def like():
     finally:
         db.close()
 
+    pipe = redis_client.pipeline()
     if author and author != g.user_id:
-        redis_client.incr(KEY_NOTIF_UNREAD.format(author))
-    redis_client.delete(KEY_POST_DETAIL.format(post_id))
+        pipe.incr(KEY_NOTIF_UNREAD.format(author))
+    pipe.delete(KEY_POST_DETAIL.format(post_id))
+    pipe.execute()
     return jsonify(ok({"liked": True, "like_count": like_count}))

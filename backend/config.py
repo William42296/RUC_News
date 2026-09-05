@@ -10,7 +10,19 @@ DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'ruc_news.db')}"
 
 # ---------- Redis ----------
 REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
-redis_client = redis_lib.from_url(REDIS_URL, decode_responses=True)
+# 显式连接池：复用连接、设上限，避免每请求新建连接（降延迟）
+_redis_pool = redis_lib.ConnectionPool.from_url(
+    REDIS_URL, decode_responses=True, max_connections=20)
+redis_client = redis_lib.Redis(connection_pool=_redis_pool)
+
+# Lua 原子缓存回填（EVALSHA 自动缓存脚本体）：命中即返回，未命中则 SET EX，
+# 并发未命中时仅首个写者生效，防止重复写 / 缓存击穿。
+GET_OR_SET = redis_client.register_script("""
+local v = redis.call('GET', KEYS[1])
+if v then return v end
+redis.call('SET', KEYS[1], ARGV[1], 'EX', tonumber(ARGV[2]))
+return ARGV[1]
+""")
 
 # ---------- JWT ----------
 SECRET_KEY = os.environ.get("SECRET_KEY", "ruc-news-dev-secret-key-change-me-in-production-2026")
@@ -119,7 +131,7 @@ ZONE_KEYWORDS = {
 }
 
 # ---------- 悬赏 / 大事件 业务类型（与分区解耦） ----------
-BOUNTY_TYPE_LABELS = {"team": "组队", "lost": "事务招领", "secondhand": "二手交易"}
+BOUNTY_TYPE_LABELS = {"team": "组队", "lost": "失物招领", "secondhand": "二手交易"}
 POST_TYPE_KEYWORDS = {
     "lost": ["失物", "招领", "捡到", "拾到", "丢失", "遗失", "寻物", "失主", "掉了", "丢了"],
     "secondhand": ["二手", "转让", "出售", "求购", "闲置", "出手", "低价", "自提", "九成新"],

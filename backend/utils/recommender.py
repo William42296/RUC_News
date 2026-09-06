@@ -134,18 +134,6 @@ def _zone_interest_scores(db, user_id):
     return scores
 
 
-def _ctr(post):
-    """预估点击率：点击+浏览数归一（+1 平滑）。"""
-    return min((post.hot or 0) / 1000.0, 1.0)
-
-
-def _engage_rate(db, post_id):
-    """互动率：赞+评论 归一（+1 平滑）。"""
-    n = (db.query(Like).filter(Like.post_id == post_id).count()
-         + db.query(Comment).filter(Comment.post_id == post_id).count())
-    return min(n / 50.0, 1.0)
-
-
 def recommend(user_id, top_n=RECOMMEND_TOP_N, page=1, limit=None):
     """多目标加权打分，按得分降序返回；含 E-E 探索；支持分页（无限滚动）。"""
     limit = limit or top_n
@@ -157,11 +145,18 @@ def recommend(user_id, top_n=RECOMMEND_TOP_N, page=1, limit=None):
 
         interest = _zone_interest_scores(db, user_id)
         posts = db.query(Post).all()
+
+        # 一次性聚合互动数，避免逐帖 N+1 查询（10k+ 数据池下必需）
+        like_counts = dict(db.query(Like.post_id, func.count(Like.id))
+                           .group_by(Like.post_id).all())
+        comment_counts = dict(db.query(Comment.post_id, func.count(Comment.id))
+                              .group_by(Comment.post_id).all())
+
         scored = []
         for p in posts:
             s_interest = interest.get(p.zone, 0.0)
-            s_ctr = _ctr(p)
-            s_eng = _engage_rate(db, p.id)
+            s_ctr = min((p.hot or 0) / 1000.0, 1.0)
+            s_eng = min((like_counts.get(p.id, 0) + comment_counts.get(p.id, 0)) / 50.0, 1.0)
             score = W_INTEREST * s_interest + W_CTR * s_ctr + W_ENGAGE * s_eng
             scored.append((score, p))
 

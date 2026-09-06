@@ -55,10 +55,8 @@ def _latest_from_db(page, limit, zone=None):
 def home():
     page = int(request.args.get("page", 1))
     limit = int(request.args.get("limit", RECOMMEND_TOP_N))
-    user_id = getattr(g, "user_id", None)
-    if user_id is None:
-        posts, total = _latest_from_db(page, limit)
-        return jsonify(_list_resp(posts, total, page, limit))
+    # 推荐页统一走算法排序；匿名用户按 CTR/互动热度排序，绝不依赖发帖时间
+    user_id = getattr(g, "user_id", None) or 0
     posts, total = recommend(user_id, top_n=limit, page=page, limit=limit)
     return jsonify(_list_resp(posts, total, page, limit))
 

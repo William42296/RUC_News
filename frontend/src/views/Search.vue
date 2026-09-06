@@ -60,6 +60,13 @@ function clearResults() {
   searchTimeMs.value = null
 }
 
+// 返回初始发现页：清空输入、结果与快捷分类筛选
+function resetToDiscover() {
+  debouncedSearch.cancel()
+  keyword.value = ''
+  clearResults()
+}
+
 async function fetchPage(kw, p) {
   const res = await searchApi(kw, p, postTypeFilter.value)
   const list = extractList(res).map(normalizePost).filter(Boolean)
@@ -231,6 +238,7 @@ onBeforeUnmount(() => {
         @update:model-value="onInput"
         @search="onSearchSubmit"
       />
+      <span v-if="hasResult" class="search-bar__cancel pressable" @click="resetToDiscover">取消</span>
     </div>
 
     <!-- 无搜索词：展示历史 + 大家都在搜 + 快捷分类 -->
@@ -338,7 +346,22 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  padding-right: var(--page-margin);
   background: var(--color-card);
+}
+
+.search-bar :deep(.van-search) {
+  flex: 1;
+  padding-right: 0;
+}
+
+.search-bar__cancel {
+  flex-shrink: 0;
+  padding-left: 12px;
+  font-size: var(--font-size-body);
+  color: var(--color-primary);
 }
 
 .discover {

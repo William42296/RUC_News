@@ -3,6 +3,7 @@ backend/__pycache__/
 backend/*.pyc
 backend/ruc_news.db
 backend/session.json
+backend/dump.rdb
 backend/.venv/
 
 # —— 前端 ——
